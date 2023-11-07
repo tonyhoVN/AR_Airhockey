@@ -4,10 +4,8 @@ import sys, random
 from threading import Thread
 import cv2 as cv
 import numpy as np 
-from pyzbar.pyzbar import decode
-from qreader import QReader
 from cvzone.HandTrackingModule import HandDetector 
-import time
+import time, serial
 from math import sin,cos,tan,atan2,pi,sqrt
 
 if sys.version_info.major > 2:
@@ -15,7 +13,7 @@ if sys.version_info.major > 2:
 else:
     import Tkinter as tk
 
-#### PARAMETER #####
+#### PARAMETER FOR DISPLAY #####
 RED, BLACK, WHITE, DARK_RED, BLUE = "red", "black", "white", "dark red", "blue"
 ZERO = 2 #for edges.
 LOWER, UPPER = "lower", "upper"
@@ -23,34 +21,40 @@ HOME, AWAY = "Top", "Bottom"
 
 ######## GAME SETTUP - START_SCORE.copy().
 START_SCORE = {HOME: 0, AWAY: 0}
-MAX_SCORE = 7 #Winning score.
-SPEED = 30 #milliseconds between frame update.
+MAX_SCORE = 7 # Winning score.
+SPEED = 30 # milliseconds between frame update.
 FONT = "ms 50"
-MAX_PUCK_SPEED= 15 # Speed of puck and paddle
-PADDLE_SPEED = MAX_PUCK_SPEED*0.8
+MAX_PUCK_SPEED= 15 # Speed of puck
+PADDLE_SPEED = MAX_PUCK_SPEED*0.8 # Speed of paddle
 GOAL_WIDTH_RATIO = 0.1 # Width of goal compare to width of table 
 
 # Table size
 SCREEN_X = 1280
 SCREEN_Y = 720
 
-# Player paddle 
+# Player paddle setup
 X_PADDLE_PLAYER = SCREEN_X - 50
 Y_PADDLE_PLAYER = SCREEN_Y/2 
 X_PADDLE_PLAYER_PREVIOUS = SCREEN_X - 50
 Y_PADDLE_PLAYER_PREVIOUS = SCREEN_Y/2
-PADDLE_SIZE = 20
-AI_MODE = ["defend", "attack"]
+PADDLE_SIZE = 50
+AI_MODE = "attack" # "defend" or "attack"
 
-# Puck
+# Puck setup
 X_PUCK = SCREEN_X/2
 Y_PUCK = SCREEN_Y/2
 PUCK_SIZE = 20
 
-#### CALIB CAM ####
+#### CALIBRATION CAM ####
 points = [] # select point 
 target_points = [(0, 0), (SCREEN_Y, 0), (SCREEN_Y, SCREEN_X/2), (0, SCREEN_X/2)]
 HM = None
+
+#### SETUP FOR ARDUINO CONNECTION
+port = 'COM11' # Change COM to Bluetooth or Serial
+bluetooth = serial.Serial(port, 9600) #Start communications with the bluetooth unit
+print("Connected")
+bluetooth.flushInput() #This gives the bluetooth a little kick
 
 
 #### METHODS ####
@@ -68,7 +72,8 @@ def rand():
 
 def sign(x):
     return (x > 0) - (x < 0)
-    
+
+ 
 #### OBJECT DEFINITIONS ####
         
 class Equitment(object):
@@ -150,23 +155,7 @@ class Background(object):
         d = self.goal_w/4
         self.can.create_oval(self.w/2-d, self.h/2-d, self.w/2+d, self.h/2+d, 
                                                      fill=WHITE, outline=BLUE)
-        # ## Boundary lines
-        # self.can.create_line(ZERO, self.h/2, self.w, self.h/2, fill=BLUE)#middle
-        # self.can.create_line(ZERO, ZERO, ZERO, self.h, fill=BLUE) #left
-        # self.can.create_line(self.w, ZERO, self.w, self.h, fill=BLUE) #right
-        
-        # #top
-        # self.can.create_line(ZERO, ZERO, self.w/2-self.goal_w/2, ZERO, 
-        #                                                              fill=BLUE) 
-        # self.can.create_line(self.w/2+self.goal_w/2, ZERO, self.w, ZERO, 
-        #                                                              fill=BLUE) 
-        
-        # #bottom
-        # self.can.create_line(ZERO, self.h, self.w/2-self.goal_w/2, self.h, 
-        #                                                              fill=BLUE)
-        # self.can.create_line(self.w/2+self.goal_w/2, self.h, self.w, self.h, 
-        #                                                              fill=BLUE)
-
+        ## Boundary lines
         self.can.create_line(self.w/2, ZERO, self.w/2, self.h, fill=BLUE) #middle
         self.can.create_line(ZERO, ZERO, self.w, ZERO, fill=BLUE) # top
         self.can.create_line(ZERO, self.h, self.w, self.h, fill=BLUE) # bottom
@@ -216,7 +205,6 @@ class Puck(object):
     def __init__(self, canvas, background):
         self.background = background
         self.screen = self.background.get_screen()
-        # self.x, self.y = self.screen[0]/2, self.screen[1]/2
         self.x, self.y = X_PUCK, Y_PUCK
         # self.can, self.w = canvas, self.background.get_goal_w()/12
         self.can, self.w = canvas, PUCK_SIZE
@@ -259,10 +247,14 @@ class Puck(object):
         return (self.x, self.y)
 
     def hit(self, paddle, moving = False):
+        # Update velocity of ball
         x_paddle, y_paddle = paddle.get_position()
         delta_x = self.x - x_paddle
         delta_y = self.y - y_paddle
         self.angle = atan2(delta_y,delta_x)
+
+        # Publish a vibration signal 
+        # bluetooth.write(str.encode(str(1)))
     
     def __eq__(self, other):
         return other == self.puck
@@ -280,14 +272,11 @@ class Player(object):
     def __init__(self, master, canvas, background, puck, constraint):
         self.puck, self.background = puck, background
         self.constraint, self.v = constraint, PADDLE_SPEED
-        # if self.constraint == UPPER: self.v = 2
-        # else: self.v = PADDLE_SPEED
-        self.ai_mode = AI_MODE[1]
+        self.ai_mode = AI_MODE
         screen = self.background.get_screen()
         self.y = Y_PADDLE_PLAYER
         self.x = 100 if self.constraint == UPPER else X_PADDLE_PLAYER
 
-        # self.paddle = Paddle(canvas, self.background.get_goal_w()/7, (self.x, self.y)))
         self.paddle = Paddle(canvas, PADDLE_SIZE, (self.x, self.y),constraint)
         self.up, self.down, self.left, self.right = False, False, False, False
         
@@ -317,10 +306,6 @@ class Player(object):
 
         ## AI PLAYER        
         if self.constraint == UPPER:
-            # if self.up: y = self.y - self.v
-            # if self.down: y = self.y + self.v
-            # if self.left: x = self.x - self.v
-            # if self.right: x = self.x + self.v
             if self.ai_mode == "defend":
                 if (x_puck < SCREEN_X/2 + 30 )and x_puck > x and vel_x_puck < 0:
                     if abs(y_puck-y) - (PUCK_SIZE+PADDLE_SIZE) > 5:
@@ -346,26 +331,19 @@ class Player(object):
         
         ## HUMAN PLAYER
         if self.constraint == LOWER:
-            # if self.up: y = self.y + self.v
-            # if self.down: y = self.y - self.v
-            # if self.left: x = self.x - self.v
-            # if self.right: x = self.x + self.v
             x = X_PADDLE_PLAYER
             y = Y_PADDLE_PLAYER
         
         ## Check the position of paddle
-        if self.background.is_position_valid((x, y), 
-                                      self.paddle.get_width(), self.constraint):
+        if self.background.is_position_valid((x, y), self.paddle.get_width(), self.constraint):
             self.x, self.y = x, y
             self.paddle.update((self.x, self.y))
         
         ## Check the collision 
         if sqrt((self.x-x_puck)**2 + (self.y-y_puck)**2) <= (PUCK_SIZE + PADDLE_SIZE + 1):
             self.puck.hit(self.paddle)
-
-        # if self.puck == self.paddle:
-        #     moving = any((self.up, self.down, self.left, self.right))
-        #     self.puck.hit(self.paddle, moving)
+        
+        ## Check 
 
     def MoveUp(self, callback=False):
         self.up = True
@@ -443,54 +421,14 @@ class Home(object):
 def play():
     """ screen: tuple, screen size (w, h). """
     root = tk.Tk()
-#    root.state("zoomed")
-#    root.resizable(0, 0)
-
     screen = SCREEN_X,SCREEN_Y
     Home(root, screen)
-    #root.eval('tk::PlaceWindow %s center' %root.winfo_pathname(root.winfo_id()))
-
     time.sleep(1)
     root.mainloop()
 
 '''
 CAMERA
 '''
-detector = QReader()
-def detect_qr(img): 
-
-    # Detect QR code 
-    x_center = None
-    y_center = None
-    for code in decode(img):
-        # print(code)
-        points = np.array([code.polygon], np.int32)
-
-        for point in points:
-            # Get corner
-            x_corners = point[:,0]
-            y_corners = point[:,1]
-            # find center
-            x_center = int(sum(x_corners)/4)
-            y_center = int(sum(y_corners)/4)
-
-            cv.circle(img, (x_center, y_center), 10, (0,255,0), 5)
-
-    return img, x_center, y_center
-
-def aruco_detect(img):
-    codes = detector.detect(image=img)
-    x_center = None
-    y_center = None
-#   Print the results
-    for code in codes:
-        center = list(code['cxcy'])
-        x_center = int(center[0])
-        y_center = int(center[1])
-        cv.circle(img, (x_center, y_center), 10, (0,255,0), 5)
-      
-    return img, x_center, y_center
-
 ## Detect Hand 
 hand_detector = HandDetector(maxHands=1, detectionCon=0.8) 
 def hand_detect(img):
@@ -550,10 +488,6 @@ def camera():
         # Capture frame 
         _, frame = cap.read()
         # frame = cv.flip(frame, 1) # flip frame
-        # size = (SCREEN_Y, int(SCREEN_X/2))
-        # frame = cv.resize(frame, size) 
-        # height = frame.shape[0]
-        # width = frame.shape[1]
 
         # Warp Resize
         frame = cv.warpPerspective(frame, HM, (int(SCREEN_Y), int(SCREEN_X/2)))
@@ -561,10 +495,6 @@ def camera():
         # # detection 
         frame_new, x_center, y_center = hand_detect(frame)
         if (x_center is not None) and (y_center is not None): 
-        #     ratio_x = x_center/width #*1.5
-        #     ratio_y = y_center/height #*1.5
-        #     Y_PADDLE_PLAYER = int(SCREEN_Y - ratio_x*SCREEN_Y)
-        #     X_PADDLE_PLAYER = int(ratio_y*SCREEN_X/2 + SCREEN_X/2)
             Y_PADDLE_PLAYER = x_center
             X_PADDLE_PLAYER = y_center + SCREEN_X/2     
             
