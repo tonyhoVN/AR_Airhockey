@@ -51,10 +51,11 @@ target_points = [(0, 0), (SCREEN_Y, 0), (SCREEN_Y, SCREEN_X/2), (0, SCREEN_X/2)]
 HM = None
 
 #### SETUP FOR ARDUINO CONNECTION
-port = 'COM11' # Change COM to Bluetooth or Serial
+port = 'COM9' # Change COM to Bluetooth or Serial
 bluetooth = serial.Serial(port, 9600) #Start communications with the bluetooth unit
 print("Connected")
 bluetooth.flushInput() #This gives the bluetooth a little kick
+SEND_SIGNAL = True
 
 
 #### METHODS ####
@@ -246,7 +247,7 @@ class Puck(object):
     def get_position(self):
         return (self.x, self.y)
 
-    def hit(self, paddle, moving = False):
+    def hit(self, paddle, paddle_name):
         # Update velocity of ball
         x_paddle, y_paddle = paddle.get_position()
         delta_x = self.x - x_paddle
@@ -254,7 +255,8 @@ class Puck(object):
         self.angle = atan2(delta_y,delta_x)
 
         # Publish a vibration signal 
-        # bluetooth.write(str.encode(str(1)))
+        if SEND_SIGNAL == True and paddle_name == LOWER:
+            bluetooth.write(str.encode(str(1)))
     
     def __eq__(self, other):
         return other == self.puck
@@ -341,9 +343,8 @@ class Player(object):
         
         ## Check the collision 
         if sqrt((self.x-x_puck)**2 + (self.y-y_puck)**2) <= (PUCK_SIZE + PADDLE_SIZE + 1):
-            self.puck.hit(self.paddle)
-        
-        ## Check 
+            self.puck.hit(self.paddle, self.constraint)
+     
 
     def MoveUp(self, callback=False):
         self.up = True
