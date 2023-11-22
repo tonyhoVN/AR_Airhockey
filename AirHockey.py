@@ -17,7 +17,7 @@ else:
 RED, BLACK, WHITE, DARK_RED, BLUE = "red", "black", "white", "dark red", "blue"
 ZERO = 2 #for edges.
 LOWER, UPPER = "lower", "upper"
-HOME, AWAY = "Top", "Bottom"
+HOME, AWAY = "User", "Robot"
 
 ######## GAME SETTUP - START_SCORE.copy().
 START_SCORE = {HOME: 0, AWAY: 0}
@@ -26,7 +26,7 @@ SPEED = 30 # milliseconds between frame update.
 FONT = "ms 50"
 MAX_PUCK_SPEED= 15 # Speed of puck
 PADDLE_SPEED = MAX_PUCK_SPEED*0.8 # Speed of paddle
-GOAL_WIDTH_RATIO = 0.1 # Width of goal compare to width of table 
+GOAL_WIDTH_RATIO = 0.5 # Width of goal compare to width of table 
 
 # Table size
 SCREEN_X = 1280
@@ -51,7 +51,7 @@ target_points = [(0, 0), (SCREEN_Y, 0), (SCREEN_Y, SCREEN_X/2), (0, SCREEN_X/2)]
 HM = None
 
 #### SETUP FOR ARDUINO CONNECTION
-port = 'COM9' # Change COM to Bluetooth or Serial
+port = 'COM12' # Change COM to Bluetooth or Serial
 bluetooth = serial.Serial(port, 9600) #Start communications with the bluetooth unit
 print("Connected")
 bluetooth.flushInput() #This gives the bluetooth a little kick
@@ -254,7 +254,7 @@ class Puck(object):
         delta_y = self.y - y_paddle
         self.angle = atan2(delta_y,delta_x)
 
-        # Publish a vibration signal 
+        # Publish a vibration signal when collisions
         if SEND_SIGNAL == True and paddle_name == LOWER:
             bluetooth.write(str.encode(str(1)))
     
@@ -418,6 +418,9 @@ class Home(object):
         else:
             self.can.create_text(self.screen[0]/2, self.screen[1]/2, font=FONT,
                                                  text="Point for %s" % winner, angle=90)
+            if SEND_SIGNAL == True:
+                bluetooth.write(str.encode(str(2)))
+            
                                                  
 def play():
     """ screen: tuple, screen size (w, h). """
