@@ -17,33 +17,34 @@ else:
 RED, BLACK, WHITE, DARK_RED, BLUE = "red", "black", "white", "dark red", "blue"
 ZERO = 2 #for edges.
 LOWER, UPPER = "lower", "upper"
-HOME, AWAY = "User", "Robot"
+HOME, AWAY = "Robot", "User"
 
 ######## GAME SETTUP - START_SCORE.copy().
 START_SCORE = {HOME: 0, AWAY: 0}
-MAX_SCORE = 7 # Winning score.
-SPEED = 30 # milliseconds between frame update.
+MAX_SCORE = 10 # Winning score.
+SPEED = 10 # milliseconds between frame update.
+SPEED_RESET = 3000 # milliseconds before reset frame
 FONT = "ms 50"
-MAX_PUCK_SPEED= 15 # Speed of puck
-PADDLE_SPEED = MAX_PUCK_SPEED*0.8 # Speed of paddle
-GOAL_WIDTH_RATIO = 0.5 # Width of goal compare to width of table 
+MAX_PUCK_SPEED= 8 # Speed of puck
+PADDLE_SPEED = MAX_PUCK_SPEED*0.5 # Speed of paddle
+GOAL_WIDTH_RATIO = 0.35 # Width of goal compare to width of table 
 
 # Table size
-SCREEN_X = 1280
-SCREEN_Y = 720
+SCREEN_X = 1530
+SCREEN_Y = 835
 
 # Player paddle setup
 X_PADDLE_PLAYER = SCREEN_X - 50
 Y_PADDLE_PLAYER = SCREEN_Y/2 
 X_PADDLE_PLAYER_PREVIOUS = SCREEN_X - 50
 Y_PADDLE_PLAYER_PREVIOUS = SCREEN_Y/2
-PADDLE_SIZE = 50
+PADDLE_SIZE = 60 #50
 AI_MODE = "attack" # "defend" or "attack"
 
 # Puck setup
 X_PUCK = SCREEN_X/2
 Y_PUCK = SCREEN_Y/2
-PUCK_SIZE = 20
+PUCK_SIZE = 30 #20
 
 #### CALIBRATION CAM ####
 points = [] # select point 
@@ -51,11 +52,14 @@ target_points = [(0, 0), (SCREEN_Y, 0), (SCREEN_Y, SCREEN_X/2), (0, SCREEN_X/2)]
 HM = None
 
 #### SETUP FOR ARDUINO CONNECTION
-port = 'COM12' # Change COM to Bluetooth or Serial
-bluetooth = serial.Serial(port, 9600) #Start communications with the bluetooth unit
-print("Connected")
-bluetooth.flushInput() #This gives the bluetooth a little kick
 SEND_SIGNAL = True
+port, bluetooth = None, None
+if SEND_SIGNAL == True:
+    port = 'COM13' # Change COM to Bluetooth or Serial
+    bluetooth = serial.Serial(port, 9600) #Start communications with the bluetooth unit
+    print("Connected")
+    bluetooth.flushInput() #This gives the bluetooth a little kick
+
 
 
 #### METHODS ####
@@ -90,7 +94,7 @@ class Equitment(object):
         self.x, self.y = position
         
         self.Object = self.can.create_oval(self.x-self.w, self.y-self.w, 
-                                    self.x+self.w, self.y+self.w, fill=color)
+                                    self.x+self.w, self.y+self.w, fill=color, outline = color)
     def update(self, position):
         self.x, self.y = position
         self.can.coords(self.Object, self.x-self.w, self.y-self.w,
@@ -132,7 +136,7 @@ class Paddle(Equitment):
         if constraint == LOWER:
             Equitment.__init__(self, canvas, width, position, WHITE)
             self.handle = self.can.create_oval(self.x-self.w/2, self.y-self.w/2,
-                                    self.x+self.w/2, self.y+self.w/2, fill=WHITE)
+                                    self.x+self.w/2, self.y+self.w/2, fill=WHITE, outline = WHITE)
     def update(self, position):
         Equitment.update(self, position)
         self.can.coords(self.handle, self.x-self.w/2, self.y-self.w/2,
@@ -155,17 +159,17 @@ class Background(object):
         ## middle circle
         d = self.goal_w/4
         self.can.create_oval(self.w/2-d, self.h/2-d, self.w/2+d, self.h/2+d, 
-                                                     fill=WHITE, outline=BLUE)
+                                                     fill=WHITE, outline=BLUE, width = 10)
         ## Boundary lines
-        self.can.create_line(self.w/2, ZERO, self.w/2, self.h, fill=BLUE) #middle
-        self.can.create_line(ZERO, ZERO, self.w, ZERO, fill=BLUE) # top
-        self.can.create_line(ZERO, self.h, self.w, self.h, fill=BLUE) # bottom
+        self.can.create_line(self.w/2, ZERO, self.w/2, self.h, fill=BLUE, width = 10) #middle
+        self.can.create_line(ZERO, ZERO, self.w, ZERO, fill=BLUE, width = 10) # top
+        self.can.create_line(ZERO, self.h, self.w, self.h, fill=BLUE, width = 10) # bottom
         
-        self.can.create_line(ZERO, ZERO, ZERO,self.h/2-self.goal_w/2, fill=BLUE)  
-        self.can.create_line(ZERO, self.h/2 + self.goal_w/2, ZERO, self.h, fill=BLUE)
+        self.can.create_line(ZERO, ZERO, ZERO,self.h/2-self.goal_w/2, fill=BLUE, width = 10)  
+        self.can.create_line(ZERO, self.h/2 + self.goal_w/2, ZERO, self.h, fill=BLUE, width = 10)
 
-        self.can.create_line(self.w, ZERO, self.w, self.h/2-self.goal_w/2, fill=BLUE)  
-        self.can.create_line(self.w, self.h/2 + self.goal_w/2, self.w, self.h, fill=BLUE)       
+        self.can.create_line(self.w, ZERO, self.w, self.h/2-self.goal_w/2, fill=BLUE, width = 10)  
+        self.can.create_line(self.w, self.h/2 + self.goal_w/2, self.w, self.h, fill=BLUE, width = 10)       
                                                                      
     def is_position_valid(self, position, width, constraint=None):
         x, y = position
@@ -257,6 +261,7 @@ class Puck(object):
         # Publish a vibration signal when collisions
         if SEND_SIGNAL == True and paddle_name == LOWER:
             bluetooth.write(str.encode(str(1)))
+            print("collide")
     
     def __eq__(self, other):
         return other == self.puck
@@ -277,9 +282,17 @@ class Player(object):
         self.ai_mode = AI_MODE
         screen = self.background.get_screen()
         self.y = Y_PADDLE_PLAYER
-        self.x = 100 if self.constraint == UPPER else X_PADDLE_PLAYER
 
-        self.paddle = Paddle(canvas, PADDLE_SIZE, (self.x, self.y),constraint)
+        if self.constraint == UPPER:
+            self.x = 100
+            self.paddle_size = PADDLE_SIZE
+            # self.paddle = Paddle(canvas, PADDLE_SIZE, (self.x, self.y),constraint)
+        elif self.constraint == LOWER:
+            self.x = X_PADDLE_PLAYER
+            self.paddle_size = PADDLE_SIZE + 20
+            # self.paddle = Paddle(canvas, 100, (self.x, self.y),constraint)
+
+        self.paddle = Paddle(canvas, self.paddle_size, (self.x, self.y),constraint)
         self.up, self.down, self.left, self.right = False, False, False, False
         
         if self.constraint == LOWER:
@@ -342,7 +355,7 @@ class Player(object):
             self.paddle.update((self.x, self.y))
         
         ## Check the collision 
-        if sqrt((self.x-x_puck)**2 + (self.y-y_puck)**2) <= (PUCK_SIZE + PADDLE_SIZE + 1):
+        if sqrt((self.x-x_puck)**2 + (self.y-y_puck)**2) <= (PUCK_SIZE + self.paddle_size):
             self.puck.hit(self.paddle, self.constraint)
      
 
@@ -362,7 +375,8 @@ class Player(object):
         self.left = False
     def RightRelease(self, callback=False):
         self.right = False
-        
+
+count = 0 
 class Home(object):
     """
     Game Manager.
@@ -383,21 +397,22 @@ class Home(object):
         
         master.bind("<Return>", self.reset)
         master.bind("<r>", self.reset)
+        # master.bind("ok",self.reset)
         
         master.title(str_dict(score))
         
         self.master, self.screen, self.score = master, screen, score
-        
         self.update()
         
     def reset(self, callback=False):
         """ <Return> or <r> key. """
-        if callback.keycode == 82: #r key resets score.
+        if callback and callback.keycode == 82: #r key resets score.
             self.score = START_SCORE.copy()
         self.frame.destroy()
         self.__init__(self.master, self.screen, self.score)
         
     def update(self):
+        # Update the game    
         self.puck.update()
         self.p1.update()
         self.p2.update()
@@ -406,6 +421,7 @@ class Home(object):
         else:
             winner = HOME if self.puck.in_goal() == AWAY else AWAY
             self.update_score(winner)
+            self.frame.after(SPEED_RESET, self.reset)
             
     def update_score(self, winner):
         self.score[winner] += 1
@@ -416,10 +432,12 @@ class Home(object):
                                                      text="%s wins!" % winner, angle=90)
             self.score = START_SCORE.copy()
         else:
-            self.can.create_text(self.screen[0]/2, self.screen[1]/2, font=FONT,
+            self.can.create_text(self.screen[0]/2 - 400, self.screen[1]/2, font=FONT,
                                                  text="Point for %s" % winner, angle=90)
+            # Send vibrate signal
             if SEND_SIGNAL == True:
-                bluetooth.write(str.encode(str(2)))
+                bluetooth.write(str.encode(str(2))) 
+                print("goal") 
             
                                                  
 def play():
@@ -457,6 +475,8 @@ def calibrate():
     cap = cv.VideoCapture(1, cv.CAP_DSHOW)
     while (cap.isOpened() and len(points) < 4):
         _, frame = cap.read()
+        frame = cv.flip(frame, 0)
+        frame = cv.flip(frame, 1)
 
         cv.imshow("Image",frame)  
         cv.setMouseCallback("Image", mouse_callback)
@@ -491,7 +511,8 @@ def camera():
         
         # Capture frame 
         _, frame = cap.read()
-        # frame = cv.flip(frame, 1) # flip frame
+        frame = cv.flip(frame, 0) # flip frame
+        frame = cv.flip(frame, 1)
 
         # Warp Resize
         frame = cv.warpPerspective(frame, HM, (int(SCREEN_Y), int(SCREEN_X/2)))
@@ -499,13 +520,13 @@ def camera():
         # # detection 
         frame_new, x_center, y_center = hand_detect(frame)
         if (x_center is not None) and (y_center is not None): 
-            Y_PADDLE_PLAYER = x_center
+            Y_PADDLE_PLAYER = SCREEN_Y - x_center
             X_PADDLE_PLAYER = y_center + SCREEN_X/2     
             
         # check
-        if abs(X_PADDLE_PLAYER-X_PADDLE_PLAYER_PREVIOUS) < 2:
+        if abs(X_PADDLE_PLAYER-X_PADDLE_PLAYER_PREVIOUS) < 1:
             X_PADDLE_PLAYER = X_PADDLE_PLAYER_PREVIOUS
-        if abs(Y_PADDLE_PLAYER-Y_PADDLE_PLAYER_PREVIOUS) < 2:
+        if abs(Y_PADDLE_PLAYER-Y_PADDLE_PLAYER_PREVIOUS) < 1:
             Y_PADDLE_PLAYER = Y_PADDLE_PLAYER_PREVIOUS
 
         # update previous
@@ -523,9 +544,10 @@ def camera():
 
             
 if __name__ == "__main__":
-    """ Choose screen size """  
+    """ Choose screen size """ 
+    show_thread = Thread(target=play)
+    show_thread.start() 
     calibrate()
     show_thread = Thread(target=camera)
     show_thread.start()
-    show_thread = Thread(target=play)
-    show_thread.start()
+    
