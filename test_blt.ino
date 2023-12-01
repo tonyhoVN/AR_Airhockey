@@ -1,34 +1,32 @@
 #include <SoftwareSerial.h>
-# define LED 12
-int state; 
 
-// Setup bluetooth
-SoftwareSerial BT(0,1);
+int RxData = 0;
+int motorPin = 12;     
 
 void setup() {
-  pinMode(LED, OUTPUT);
-  BT.begin(9600);
   Serial.begin(9600);
+  Serial.begin(9600);
+  pinMode(motorPin, OUTPUT);
+  digitalWrite(motorPin, LOW);
 }
 
-void loop() {
-  Serial.println(state);
+void loop(){
+  if (Serial.available()){
+    RxData = Serial.read();
+    if (RxData == '1'){
+      digitalWrite(motorPin, HIGH);
+     // analogWrite(motorPin, 255);
+      delay(100);
+    }
 
-  if (BT.available() > 0)
-  {
-    state = BT.read();
-    if (state == '1') digitalWrite(LED, HIGH);
-    delay(10);
+    if (RxData == '2'){
+      digitalWrite(motorPin, HIGH);
+      // analogWrite(motorPin, 255);
+      delay(1500);
+    }
+
+    // RxData = '0';
   }
 
-  if (Serial.available() > 0)
-  {
-    state = Serial.read();
-    if (state == '1') digitalWrite(LED, HIGH);
-    delay(10);
-  }
-
-  // Reset state
-  state = '0';
-  digitalWrite(LED, LOW);
+  digitalWrite(motorPin, LOW);
 }
