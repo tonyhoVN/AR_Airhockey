@@ -20,12 +20,14 @@ LOWER, UPPER = "lower", "upper"
 HOME, AWAY = "Robot", "User"
 
 ######## GAME SETTUP - START_SCORE.copy().
+count = 0
+START_GAME = False
 START_SCORE = {HOME: 0, AWAY: 0}
-MAX_SCORE = 10 # Winning score.
-SPEED = 10 # milliseconds between frame update.
+MAX_SCORE = 100 # Winning score.
+SPEED = 15 # milliseconds between frame update. (10)
 SPEED_RESET = 3000 # milliseconds before reset frame
 FONT = "ms 50"
-MAX_PUCK_SPEED= 8 # Speed of puck
+MAX_PUCK_SPEED= 10 # Speed of puck
 PADDLE_SPEED = MAX_PUCK_SPEED*0.5 # Speed of paddle
 GOAL_WIDTH_RATIO = 0.35 # Width of goal compare to width of table 
 
@@ -55,7 +57,7 @@ HM = None
 SEND_SIGNAL = True
 port, bluetooth = None, None
 if SEND_SIGNAL == True:
-    port = 'COM13' # Change COM to Bluetooth or Serial
+    port = 'COM12' # Change COM to Bluetooth or Serial
     bluetooth = serial.Serial(port, 9600) #Start communications with the bluetooth unit
     print("Connected")
     bluetooth.flushInput() #This gives the bluetooth a little kick
@@ -94,7 +96,7 @@ class Equitment(object):
         self.x, self.y = position
         
         self.Object = self.can.create_oval(self.x-self.w, self.y-self.w, 
-                                    self.x+self.w, self.y+self.w, fill=color, outline = color)
+                                    self.x+self.w, self.y+self.w, fill=color, outline = BLACK)
     def update(self, position):
         self.x, self.y = position
         self.can.coords(self.Object, self.x-self.w, self.y-self.w,
@@ -259,9 +261,11 @@ class Puck(object):
         self.angle = atan2(delta_y,delta_x)
 
         # Publish a vibration signal when collisions
+        global count
         if SEND_SIGNAL == True and paddle_name == LOWER:
             bluetooth.write(str.encode(str(1)))
-            print("collide")
+            count += 1
+            print("collide" + str(count))
     
     def __eq__(self, other):
         return other == self.puck
@@ -289,7 +293,7 @@ class Player(object):
             # self.paddle = Paddle(canvas, PADDLE_SIZE, (self.x, self.y),constraint)
         elif self.constraint == LOWER:
             self.x = X_PADDLE_PLAYER
-            self.paddle_size = PADDLE_SIZE + 20
+            self.paddle_size = PADDLE_SIZE + 40
             # self.paddle = Paddle(canvas, 100, (self.x, self.y),constraint)
 
         self.paddle = Paddle(canvas, self.paddle_size, (self.x, self.y),constraint)
@@ -355,7 +359,7 @@ class Player(object):
             self.paddle.update((self.x, self.y))
         
         ## Check the collision 
-        if sqrt((self.x-x_puck)**2 + (self.y-y_puck)**2) <= (PUCK_SIZE + self.paddle_size):
+        if sqrt((self.x-x_puck)**2 + (self.y-y_puck)**2) <= (PUCK_SIZE + self.paddle_size + 5):
             self.puck.hit(self.paddle, self.constraint)
      
 
@@ -376,7 +380,6 @@ class Player(object):
     def RightRelease(self, callback=False):
         self.right = False
 
-count = 0 
 class Home(object):
     """
     Game Manager.
@@ -397,11 +400,10 @@ class Home(object):
         
         master.bind("<Return>", self.reset)
         master.bind("<r>", self.reset)
-        # master.bind("ok",self.reset)
-        
-        master.title(str_dict(score))
-        
+        master.title(str_dict(score)) 
+
         self.master, self.screen, self.score = master, screen, score
+        # if START_GAME:
         self.update()
         
     def reset(self, callback=False):
@@ -438,8 +440,7 @@ class Home(object):
             if SEND_SIGNAL == True:
                 bluetooth.write(str.encode(str(2))) 
                 print("goal") 
-            
-                                                 
+                                                     
 def play():
     """ screen: tuple, screen size (w, h). """
     root = tk.Tk()
@@ -471,7 +472,7 @@ def mouse_callback(event, x, y, flags, param):
 
 ## Calibrate Camera 
 def calibrate():
-    global HM, points, target_points, SCREEN_Y, SCREEN_X
+    global HM, points, target_points, SCREEN_Y, SCREEN_X, START_GAME
     cap = cv.VideoCapture(1, cv.CAP_DSHOW)
     while (cap.isOpened() and len(points) < 4):
         _, frame = cap.read()
@@ -499,6 +500,7 @@ def calibrate():
     src_points = np.array(points, dtype=np.float32)
     dst_points = np.array(target_points, dtype=np.float32)
     HM = cv.getPerspectiveTransform(src_points, dst_points)
+    START_GAME = True
 
 def camera():
     global X_PADDLE_PLAYER, X_PADDLE_PLAYER_PREVIOUS
@@ -535,7 +537,7 @@ def camera():
         # Show 
         cv.imshow("video", frame_new)
         # 
-        key = cv.waitKey(30)
+        key = cv.waitKey(20)
         if key == 27:
             break 
 

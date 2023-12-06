@@ -16,13 +16,13 @@ void loop(){
     if (RxData == '1'){
       digitalWrite(motorPin, HIGH);
      // analogWrite(motorPin, 255);
-      delay(100);
+      delay(350);
     }
 
     if (RxData == '2'){
       digitalWrite(motorPin, HIGH);
       // analogWrite(motorPin, 255);
-      delay(1500);
+      delay(3000);
     }
 
     // RxData = '0';
